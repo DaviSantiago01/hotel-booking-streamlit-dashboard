@@ -17,6 +17,18 @@ O arquivo [`data/hotel_bookings.csv`](data/hotel_bookings.csv) contém a base p�
 
 O CSV foi mantido com os valores originais, incluindo ausências e linhas idênticas. Ele acompanhará o aplicativo para permitir o carregamento automático, sem upload pelo usuário.
 
+## Executar localmente
+
+Com Python 3.11 ou superior, execute os comandos abaixo na pasta do projeto:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m streamlit run app.py
+```
+
+Abra o endereço informado no terminal. O app carrega o CSV automaticamente e permite conferir uma amostra dos dados. As duas abas estão disponíveis; os filtros, gráficos e indicadores serão implementados nas próximas etapas.
+
 ## Uso de IA
 
 O Codex, da OpenAI, apoiou pontos específicos do desenvolvimento e ajudou a compreender as alternativas de implementação.
