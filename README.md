@@ -19,7 +19,7 @@ A pasta [`notebooks/`](notebooks/) contém o notebook [`eda_hotel_booking.ipynb`
 
 O arquivo [`data/hotel_bookings.csv`](data/hotel_bookings.csv) contém a base pública [Hotel Booking Demand](https://www.kaggle.com/datasets/jessemostipak/hotel-booking-demand), a mesma utilizada na EDA: 119.390 reservas e 32 colunas.
 
-O CSV foi mantido com os valores originais, incluindo ausências e linhas idênticas. Ele acompanhará o aplicativo para permitir o carregamento automático, sem upload pelo usuário.
+O CSV original foi preservado. O notebook exporta a versão tratada em [`data/hotel_bookings_tratado.csv`](data/hotel_bookings_tratado.csv), usada automaticamente pelo aplicativo, sem upload pelo usuário. Ela contém o tratamento das ausências e o status legível das reservas, mantendo todas as linhas e os valores extremos.
 
 ## Executar localmente
 
@@ -31,7 +31,7 @@ python -m venv .venv
 .venv\Scripts\python -m streamlit run app.py
 ```
 
-Abra o endereço informado no terminal. O app carrega o CSV automaticamente e permite conferir uma amostra dos dados. As duas abas estão disponíveis; os filtros, gráficos e indicadores serão implementados nas próximas etapas.
+Abra o endereço informado no terminal. O app carrega o CSV automaticamente e apresenta os indicadores na aba Visão geral. Os filtros e gráficos serão implementados nas próximas etapas.
 
 ## Uso de IA
 
