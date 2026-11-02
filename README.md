@@ -4,8 +4,12 @@ Projeto acadêmico em Streamlit para explorar dados de reservas de hotéis, com 
 
 ## Dashboards
 
-1. **Laboratório de análise:** exploração das distribuições e correlações entre variáveis.
-2. **Visão gerencial:** indicadores e gráficos sobre reservas e cancelamentos para apoiar a gestão hoteleira.
+1. **Visão geral:** primeira aba, com indicadores e gráficos sobre reservas e cancelamentos para gestores e equipes de reservas de hotéis.
+2. **Análise detalhada:** filtros, histogramas e correlações para investigar as informações das reservas.
+
+A Visão geral corresponde ao Dashboard 2 do enunciado; a Análise detalhada corresponde ao Dashboard 1, o laboratório de distribuição e correlação.
+
+Os dois esboços estão em [`entregas/`](entregas/): [Visão geral](entregas/rascunho_dashboard_2.png) e [Análise detalhada](entregas/rascunho_dashboard_1.png). As imagens mostram a organização planejada, com gráficos ilustrativos.
 
 ## Análise exploratória
 

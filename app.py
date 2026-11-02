@@ -30,12 +30,12 @@ with st.expander("Conferir os dados carregados"):
     st.write(f"{len(df):,} reservas e {len(df.columns)} colunas.".replace(",", "."))
     st.dataframe(df.head(), hide_index=True)
 
-laboratorio, gestao = st.tabs(["Laboratório de análise", "Visão gerencial"])
+visao_geral, analise_detalhada = st.tabs(["Visão geral", "Análise detalhada"])
 
-with laboratorio:
+with visao_geral:
+    st.header("Reservas e cancelamentos")
+    st.info("Em construção: indicadores e gráficos para acompanhar as reservas e os cancelamentos.")
+
+with analise_detalhada:
     st.header("Distribuição e correlação")
-    st.info("Em construção: seleção de variáveis, filtro de intervalo, histogramas e mapa de correlação.")
-
-with gestao:
-    st.header("Indicadores de reservas")
-    st.info("Em construção: indicadores e visuais para gestores de reservas e planejamento hoteleiro.")
+    st.info("Em construção: escolha das informações, filtro de valores e gráficos para investigar as reservas.")
