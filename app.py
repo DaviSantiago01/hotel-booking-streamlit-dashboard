@@ -22,6 +22,10 @@ VARIAVEIS = {
 }
 
 HOTEIS = {"Todos": "Todos os hotéis", "City Hotel": "Hotel urbano", "Resort Hotel": "Resort"}
+MESES = {nome: numero for numero, nome in enumerate([
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+], start=1)}
 
 
 # [IA] Codex — apoio na formatação dos valores.
@@ -29,12 +33,27 @@ def numero_br(valor, casas=0):
     return f"{valor:,.{casas}f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
 
+# [IA] Codex — apoio no cálculo dos cancelamentos.
+def resumir_cancelamentos(dados, coluna):
+    """Conta reservas e cancelamentos em cada grupo."""
+    resumo = (
+        dados.assign(cancelada=dados["booking_status"] == "Canceled")
+        .groupby(coluna, observed=True, as_index=False)
+        .agg(reservas=("cancelada", "size"), canceladas=("cancelada", "sum"))
+    )
+    resumo["taxa"] = resumo["canceladas"] / resumo["reservas"]
+    resumo["taxa_texto"] = resumo["taxa"].map(lambda valor: numero_br(valor * 100, 1) + "%")
+    for contagem in ["reservas", "canceladas"]:
+        resumo[f"{contagem}_texto"] = resumo[contagem].map(numero_br)
+    return resumo
+
+
 # [IA] Codex — apoio no carregamento dos dados.
 @st.cache_data(show_spinner="Carregando reservas…")
 def carregar_dados(caminho, modificacao):
     """Valida o CSV; a data de modificação renova o cache quando o arquivo muda."""
     dados = pd.read_csv(caminho, low_memory=False)
-    obrigatorias = set(VARIAVEIS) | {"hotel", "booking_status"}
+    obrigatorias = set(VARIAVEIS) | {"hotel", "booking_status", "arrival_date_year", "arrival_date_month"}
     if not obrigatorias.issubset(dados.columns):
         raise ValueError("A base não contém todas as colunas necessárias. Exporte novamente a versão tratada pelo notebook.")
     if dados.empty or dados[list(obrigatorias)].isna().any().any():
@@ -43,12 +62,19 @@ def carregar_dados(caminho, modificacao):
         raise ValueError("O status das reservas é inválido. Use a base tratada exportada pelo notebook.")
     if not dados["hotel"].isin(["City Hotel", "Resort Hotel"]).all():
         raise ValueError("A base contém tipos de hotel não reconhecidos.")
-    for coluna in VARIAVEIS:
+    for coluna in list(VARIAVEIS) + ["arrival_date_year"]:
         if not pd.api.types.is_numeric_dtype(dados[coluna]) or not np.isfinite(dados[coluna]).all():
             raise ValueError("A base contém valores numéricos inválidos. Confira a exportação no notebook.")
     for coluna in set(VARIAVEIS) - {"adr"}:
         if (dados[coluna] < 0).any() or (dados[coluna] % 1 != 0).any():
             raise ValueError("Antecedência, noites e pedidos precisam ser números inteiros não negativos.")
+    dados["mes_chegada"] = pd.to_datetime({
+        "year": dados["arrival_date_year"],
+        "month": dados["arrival_date_month"].map(MESES),
+        "day": 1,
+    }, errors="coerce")
+    if dados["mes_chegada"].isna().any():
+        raise ValueError("Há meses ou anos de chegada inválidos na base.")
     return dados
 
 
@@ -170,6 +196,124 @@ with visao_geral:
     )
     if df_filtrado.empty:
         st.warning("Nenhuma reserva encontrada. Amplie a faixa de valores ou escolha outro hotel.")
+    else:
+        if len(df_filtrado) < 30:
+            st.info("Poucas reservas neste recorte: as porcentagens podem variar muito com apenas um cancelamento.")
+        # [IA] Codex — apoio no gráfico por hotel.
+        coluna_hotel, coluna_antecedencia = st.columns(2)
+        cancelamentos_hotel = resumir_cancelamentos(df_filtrado, "hotel")
+        cancelamentos_hotel["tipo_hotel"] = cancelamentos_hotel["hotel"].map(HOTEIS)
+
+        base_hotel = alt.Chart(cancelamentos_hotel).encode(
+            y=alt.Y("tipo_hotel:N", title=None, sort="-x"),
+            x=alt.X(
+                "taxa:Q", title="Reservas canceladas (%)",
+                scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%"),
+            ),
+            tooltip=[
+                alt.Tooltip("tipo_hotel:N", title="Hotel"),
+                alt.Tooltip("reservas_texto:N", title="Total de reservas"),
+                alt.Tooltip("canceladas_texto:N", title="Canceladas"),
+                alt.Tooltip("taxa_texto:N", title="Taxa de cancelamento"),
+            ],
+        )
+        maior_taxa = cancelamentos_hotel["taxa"].max()
+        ha_diferenca = cancelamentos_hotel["taxa"].nunique() > 1
+        cancelamentos_hotel["destaque"] = ha_diferenca & cancelamentos_hotel["taxa"].eq(maior_taxa)
+        barras_hotel = base_hotel.mark_bar(size=45).encode(
+            color=alt.condition("datum.destaque", alt.value("#56BFC4"), alt.value("#9AADB5"))
+        )
+        # Fora da barra, o texto segue o tema; taxas altas ficam dentro para não cortar o rótulo.
+        valores_hotel_fora = base_hotel.transform_filter("datum.taxa <= 0.85").mark_text(
+            dx=7, align="left",
+        ).encode(text="taxa_texto:N")
+        valores_hotel_dentro = base_hotel.transform_filter("datum.taxa > 0.85").mark_text(
+            dx=-7, align="right", color="#15272B",
+        ).encode(text="taxa_texto:N")
+        with coluna_hotel:
+            st.subheader("Cancelamentos por hotel", help="Porcentagem cancelada dentro de cada tipo de hotel, considerando os filtros. Passe o mouse para ver os totais. A escala é a mesma do gráfico de antecedência.")
+            st.altair_chart(
+                (barras_hotel + valores_hotel_fora + valores_hotel_dentro)
+                .properties(height=300).configure_view(stroke=None)
+            )
+            if len(cancelamentos_hotel) == 1:
+                st.caption("Escolha todos os hotéis na lateral para comparar os dois tipos.")
+            elif ha_diferenca:
+                ordenado = cancelamentos_hotel.sort_values("taxa", ascending=False)
+                diferenca = (ordenado.iloc[0]["taxa"] - ordenado.iloc[1]["taxa"]) * 100
+                st.caption(
+                    f"Neste recorte, {ordenado.iloc[0]['tipo_hotel']} apresenta "
+                    f"{numero_br(diferenca, 1)} pontos percentuais a mais que "
+                    f"{ordenado.iloc[1]['tipo_hotel']}."
+                )
+            else:
+                st.caption("Os dois tipos de hotel apresentam a mesma taxa neste recorte.")
+
+        # [IA] Codex — apoio no gráfico por antecedência.
+        # Faixas fixas permitem comparar o mesmo intervalo ao mudar os filtros.
+        faixas = ["Até 7 dias", "8–30 dias", "31–90 dias", "91–180 dias", "Mais de 180 dias"]
+        reservas_por_faixa = df_filtrado.assign(
+            faixa=pd.cut(df_filtrado["lead_time"], bins=[-1, 7, 30, 90, 180, np.inf], labels=faixas),
+        )
+        cancelamentos_antecedencia = resumir_cancelamentos(reservas_por_faixa, "faixa")
+        base_antecedencia = alt.Chart(cancelamentos_antecedencia).encode(
+            x=alt.X("faixa:N", title="Antecedência da reserva", sort=faixas, axis=alt.Axis(labelAngle=-25)),
+            y=alt.Y("taxa:Q", title="Reservas canceladas (%)", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
+            tooltip=[
+                alt.Tooltip("faixa:N", title="Antecedência"),
+                alt.Tooltip("reservas_texto:N", title="Total de reservas"),
+                alt.Tooltip("canceladas_texto:N", title="Canceladas"),
+                alt.Tooltip("taxa_texto:N", title="Taxa de cancelamento"),
+            ],
+        )
+        with coluna_antecedencia:
+            st.subheader("Cancelamentos por antecedência", help="Reservas agrupadas pelo número de dias entre a reserva e a chegada. A taxa é calculada dentro de cada faixa e os totais aparecem ao passar o mouse. Faixas sem reservas são omitidas; a associação não demonstra causalidade.")
+            valores_antecedencia_fora = base_antecedencia.transform_filter("datum.taxa <= 0.9").mark_text(
+                dy=-10,
+            ).encode(text="taxa_texto:N")
+            valores_antecedencia_dentro = base_antecedencia.transform_filter("datum.taxa > 0.9").mark_text(
+                dy=14, color="#15272B",
+            ).encode(text="taxa_texto:N")
+            st.altair_chart((
+                base_antecedencia.mark_bar(color="#56BFC4")
+                + valores_antecedencia_fora
+                + valores_antecedencia_dentro
+            ).properties(height=300))
+            st.caption("Faixas fixas de antecedência. Compare as porcentagens junto com o total de reservas de cada faixa.")
+
+        # [IA] Codex — apoio no gráfico mensal.
+        st.subheader("Reservas por mês de chegada", help="Quantidade de reservas com chegada prevista em cada mês e ano, incluindo as canceladas. Não representa ocupação nem data de criação da reserva. Meses sem registros no recorte aparecem com zero dentro do período coberto pela base.")
+        # Usamos ano e mês juntos para não misturar os períodos da base.
+        mes_chegada = df["mes_chegada"]
+        calendario = pd.date_range(mes_chegada.min(), mes_chegada.max(), freq="MS")
+        volume_mensal = (
+            df_filtrado["mes_chegada"].value_counts()
+            .reindex(calendario, fill_value=0).rename_axis("mes")
+            .reset_index(name="reservas")
+        )
+        volume_mensal["mes_texto"] = volume_mensal["mes"].dt.strftime("%m/%Y")
+        volume_mensal["reservas_texto"] = volume_mensal["reservas"].map(numero_br)
+        grafico_mensal = alt.Chart(volume_mensal).mark_line(point=True, color="#56BFC4").encode(
+            x=alt.X("mes:T", title="Mês e ano de chegada", axis=alt.Axis(format="%m/%Y", tickCount=8)),
+            y=alt.Y("reservas:Q", title="Quantidade de reservas", scale=alt.Scale(zero=True),
+                        axis=alt.Axis(tickMinStep=1, labelExpr="replace(format(datum.value, ',.0f'), ',', '.')")),
+            tooltip=[alt.Tooltip("mes_texto:N", title="Chegada"), alt.Tooltip("reservas_texto:N", title="Reservas")],
+        ).properties(height=300).interactive(bind_y=False)
+        st.altair_chart(grafico_mensal)
+        st.caption("Inclui reservas canceladas e não canceladas. Cobertura da base: julho/2015 a agosto/2017; 2015 e 2017 não são anos completos.")
+        with st.expander("Ver valores dos gráficos"):
+            st.write("Cancelamentos por hotel")
+            st.dataframe(cancelamentos_hotel[["tipo_hotel", "reservas", "canceladas", "taxa_texto"]].rename(columns={
+                "tipo_hotel": "Hotel", "reservas": "Reservas", "canceladas": "Canceladas", "taxa_texto": "Taxa",
+            }), hide_index=True)
+            st.write("Cancelamentos por antecedência")
+            st.dataframe(cancelamentos_antecedencia[["faixa", "reservas", "canceladas", "taxa_texto"]].rename(columns={
+                "faixa": "Antecedência", "reservas": "Reservas", "canceladas": "Canceladas", "taxa_texto": "Taxa",
+            }), hide_index=True)
+            st.write("Reservas por mês de chegada")
+            st.dataframe(volume_mensal[["mes_texto", "reservas"]].rename(columns={
+                "mes_texto": "Mês/ano", "reservas": "Reservas",
+            }), hide_index=True)
 
 # [IA] Codex — apoio nos controles da análise.
 with analise_detalhada:
