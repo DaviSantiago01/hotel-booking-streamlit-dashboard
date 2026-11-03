@@ -31,8 +31,14 @@ python -m venv .venv
 .venv\Scripts\python -m streamlit run app.py
 ```
 
-Abra o endereço informado no terminal. O app carrega o CSV automaticamente e apresenta os indicadores na aba Visão geral. Os filtros e gráficos serão implementados nas próximas etapas.
+Abra o endereço informado no terminal. O app carrega o CSV automaticamente. Os filtros da lateral selecionam as reservas usadas nas duas abas.
+
+A **Visão geral** mostra quatro indicadores, cancelamentos por tipo de hotel, cancelamentos por faixa de antecedência e volume por mês e ano de chegada. As taxas são calculadas dentro de cada grupo. O volume mensal inclui canceladas e não canceladas; a base cobre julho/2015 a agosto/2017.
+
+Na **Análise detalhada**, você escolhe as informações e vê histogramas interativos e a correlação de Spearman. O zoom só muda a visualização, enquanto os filtros alteram o conjunto de reservas. O mapa mostra N/D quando uma informação não varia e orienta a seleção de pelo menos duas informações.
+
+O slider permite escolher o intervalo de valores, e “Limpar filtros” retorna à base completa. O nível de detalhe ajusta as faixas dos histogramas de antecedência e diária; noites e pedidos mantêm uma barra por valor inteiro. A opção “Um gráfico por linha” amplia os histogramas. As opções “Ver valores dos gráficos” e “Ver correlações em tabela” permitem consultar os resultados numéricos.
 
 ## Uso de IA
 
-O Codex, da OpenAI, apoiou pontos específicos do desenvolvimento e ajudou a compreender as alternativas de implementação.
+Utilizei o Codex, da OpenAI, como apoio no desenvolvimento e na compreensão das análises, revisando as sugestões antes de aplicá-las.
