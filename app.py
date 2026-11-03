@@ -223,11 +223,10 @@ with visao_geral:
         barras_hotel = base_hotel.mark_bar(size=45).encode(
             color=alt.condition("datum.destaque", alt.value("#56BFC4"), alt.value("#9AADB5"))
         )
-        # O contorno claro mantém o texto legível nos dois temas.
+        # Texto claro suave, sem contorno branco.
         # Taxas altas ficam dentro da barra para não cortar o rótulo.
         valores_hotel_fora = base_hotel.transform_filter("datum.taxa <= 0.85").mark_text(
-            dx=7, align="left", color="#15272B", stroke="#FFFFFF",
-            strokeWidth=0.8, fontWeight="bold", fontSize=13,
+            dx=7, align="left", color="#CBD5E1", fontSize=13,
         ).encode(text="taxa_texto:N")
         valores_hotel_dentro = base_hotel.transform_filter("datum.taxa > 0.85").mark_text(
             dx=-7, align="right", color="#15272B",
@@ -271,8 +270,7 @@ with visao_geral:
         with coluna_antecedencia:
             st.subheader("Cancelamentos por antecedência", help="Reservas agrupadas pelo número de dias entre a reserva e a chegada. A taxa é calculada dentro de cada faixa e os totais aparecem ao passar o mouse. Faixas sem reservas são omitidas; a associação não demonstra causalidade.")
             valores_antecedencia_fora = base_antecedencia.transform_filter("datum.taxa <= 0.9").mark_text(
-                dy=-10, color="#15272B", stroke="#FFFFFF",
-                strokeWidth=0.8, fontWeight="bold", fontSize=13,
+                dy=-10, color="#CBD5E1", fontSize=13,
             ).encode(text="taxa_texto:N")
             valores_antecedencia_dentro = base_antecedencia.transform_filter("datum.taxa > 0.9").mark_text(
                 dy=14, color="#15272B",
