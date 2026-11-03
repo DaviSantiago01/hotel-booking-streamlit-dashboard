@@ -3,6 +3,7 @@
 # [IA] Codex — apoio na estrutura da aplicação.
 from pathlib import Path
 
+import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -170,7 +171,167 @@ with visao_geral:
     if df_filtrado.empty:
         st.warning("Nenhuma reserva encontrada. Amplie a faixa de valores ou escolha outro hotel.")
 
+# [IA] Codex — apoio nos controles da análise.
 with analise_detalhada:
-    st.header("Distribuição e correlação")
-    st.caption(f"{numero_br(len(df_filtrado))} reservas selecionadas pelos filtros da lateral.")
-    st.info("Em construção: histogramas e correlação das informações selecionadas.")
+    variaveis_selecionadas = st.multiselect(
+        "O que você quer analisar?",
+        options=list(VARIAVEIS),
+        default=["lead_time", "stays_in_week_nights"],
+        format_func=VARIAVEIS.get,
+    )
+    if df_filtrado.empty:
+        st.warning("Nenhuma reserva encontrada. Ajuste os filtros na lateral.")
+    elif not variaveis_selecionadas:
+        st.info("Selecione uma informação para ver sua distribuição.")
+    else:
+        # [IA] Codex — apoio nos histogramas.
+        st.subheader("Distribuição das reservas")
+        numero_faixas = st.slider(
+            "Nível de detalhe do gráfico", min_value=10, max_value=100, value=30, step=5,
+            key="numero_faixas",
+            disabled=not any(col in {"adr", "lead_time"} for col in variaveis_selecionadas),
+            help="Controla o detalhe da antecedência e da diária. Noites e pedidos mantêm uma barra por valor inteiro.",
+        )
+        ampliar_graficos = st.checkbox(
+            "Um gráfico por linha", value=False,
+            help="Dá mais espaço a cada histograma, especialmente em telas menores.",
+        )
+        quantidade_colunas = 1 if ampliar_graficos or len(variaveis_selecionadas) == 1 else 2
+        colunas_graficos = st.columns(quantidade_colunas)
+
+        for indice, variavel in enumerate(variaveis_selecionadas):
+            with colunas_graficos[indice % quantidade_colunas]:
+                eh_contagem = variavel in {
+                    "stays_in_weekend_nights",
+                    "stays_in_week_nights",
+                    "total_of_special_requests",
+                }
+                ajuda = "O eixo horizontal mostra os valores e o vertical mostra a quantidade de reservas. "
+                if eh_contagem:
+                    ajuda += "Cada barra corresponde a um valor inteiro. "
+                else:
+                    ajuda += "Cada barra reúne uma faixa de valores. O nível de detalhe controla essas faixas. "
+                ajuda += (
+                    "Passe o mouse para consultar as contagens. O zoom amplia a visualização, "
+                    "mas não recalcula as faixas nem altera os indicadores."
+                )
+                st.subheader(VARIAVEIS[variavel], help=ajuda, anchor=False)
+                valores = df_filtrado[variavel]
+                if eh_contagem:
+                    limites = np.arange(valores.min() - 0.5, valores.max() + 1.5)
+                else:
+                    limites = numero_faixas
+
+                # Envia ao navegador só as contagens, sem as 119 mil linhas.
+                quantidades, bordas = np.histogram(valores, bins=limites)
+                distribuicao = pd.DataFrame({
+                    "inicio": bordas[:-1],
+                    "fim": bordas[1:],
+                    "valor": (bordas[:-1] + bordas[1:]) / 2,
+                    "reservas": quantidades,
+                })
+                distribuicao["reservas_texto"] = distribuicao["reservas"].map(numero_br)
+                # O limite direito só pertence à última faixa (regra do numpy.histogram).
+                faixas_texto = []
+                for indice_faixa, (inicio, fim) in enumerate(zip(bordas[:-1], bordas[1:])):
+                    limite_direito = "≤" if indice_faixa == len(bordas) - 2 else "<"
+                    faixas_texto.append(
+                        f"{numero_br(inicio, 2)} ≤ valor {limite_direito} {numero_br(fim, 2)}"
+                    )
+                distribuicao["faixa_texto"] = faixas_texto
+                if eh_contagem:
+                    dicas = [alt.Tooltip("valor:Q", title=VARIAVEIS[variavel], format=".0f")]
+                else:
+                    dicas = [alt.Tooltip("faixa_texto:N", title="Faixa")]
+                grafico = alt.Chart(distribuicao).mark_bar(color="#56BFC4", binSpacing=0).encode(
+                    x=alt.X(
+                        "inicio:Q", bin="binned", title=VARIAVEIS[variavel],
+                        axis=alt.Axis(
+                            tickMinStep=1 if variavel != "adr" else 0.01,
+                            labelExpr="replace(replace(replace(format(datum.value, ',.2~f'), ',', '_'), '.', ','), '_', '.')",
+                        ),
+                        scale=alt.Scale(zero=False),
+                    ),
+                    x2="fim:Q",
+                    y=alt.Y(
+                        "reservas:Q", title="Quantidade de reservas",
+                        axis=alt.Axis(tickMinStep=1, labelExpr="replace(format(datum.value, ',.0f'), ',', '.')"), scale=alt.Scale(zero=True),
+                    ),
+                    tooltip=dicas + [alt.Tooltip("reservas_texto:N", title="Reservas")],
+                ).properties(
+                    height=300,
+                    description=f"Histograma de {VARIAVEIS[variavel]} para {numero_br(len(df_filtrado))} reservas selecionadas.",
+                ).interactive(bind_y=False)
+                st.altair_chart(grafico)
+
+                if variavel == "adr" and df_filtrado["adr"].max() > 500:
+                    st.caption(
+                        "Diárias muito altas alongam a escala. O filtro lateral permite observar uma faixa menor."
+                    )
+
+        # [IA] Codex — apoio na correlação e na sua apresentação.
+        st.subheader(
+            "Como as informações se relacionam",
+            help=(
+                "Correlação de Spearman: cada célula compara duas informações. "
+                "Valores próximos de 1 indicam que elas tendem a crescer juntas; próximos de -1, "
+                "que uma tende a diminuir quando a outra cresce. Perto de zero indica pouca relação monotônica. "
+                "Isso não demonstra causa e efeito. Sem variação ou com menos de duas reservas, "
+                "a correlação não pode ser calculada."
+            ),
+        )
+        if len(variaveis_selecionadas) < 2:
+            st.info("Escolha duas ou mais informações para ver a correlação.")
+        elif len(df_filtrado) < 2:
+            st.info("São necessárias pelo menos duas reservas para calcular a correlação.")
+        else:
+            correlacao = df_filtrado[variaveis_selecionadas].corr(method="spearman")
+            celulas = []
+            for linha in variaveis_selecionadas:
+                for coluna in variaveis_selecionadas:
+                    valor = correlacao.loc[linha, coluna]
+                    celulas.append({
+                        "linha": VARIAVEIS[linha],
+                        "coluna": VARIAVEIS[coluna],
+                        "correlacao": valor if pd.notna(valor) else None,
+                        "rotulo": numero_br(valor, 2) if pd.notna(valor) else "N/D",
+                    })
+
+            ordem = [VARIAVEIS[col] for col in variaveis_selecionadas]
+            base_mapa = alt.Chart(pd.DataFrame(celulas)).encode(
+                x=alt.X("coluna:N", title=None, sort=ordem, axis=alt.Axis(labelAngle=-25, labelLimit=200)),
+                y=alt.Y("linha:N", title=None, sort=ordem, axis=alt.Axis(labelLimit=200)),
+                tooltip=[
+                    alt.Tooltip("linha:N", title="Informação"),
+                    alt.Tooltip("coluna:N", title="Comparada com"),
+                    alt.Tooltip("rotulo:N", title="Spearman"),
+                ],
+            )
+            quadrados = base_mapa.mark_rect().encode(
+                color=alt.condition(
+                    "isValid(datum.correlacao)",
+                    alt.Color(
+                        "correlacao:Q", title="Spearman",
+                        scale=alt.Scale(domain=[-1, 0, 1], range=["#E7A18B", "#F0F2F4", "#79C7C9"]),
+                        legend=alt.Legend(orient="bottom", direction="horizontal"),
+                    ),
+                    alt.value("#dedede"),
+                )
+            )
+            rotulos = base_mapa.mark_text(fontSize=13).encode(
+                text="rotulo:N",
+                color=alt.value("#15272B"),
+            )
+            mapa = (quadrados + rotulos).properties(height=max(220, 65 * len(ordem)))
+            st.altair_chart(mapa)
+            st.caption("Spearman · −1: sentidos opostos · 0: pouca relação monotônica · +1: mesmo sentido. Correlação não implica causalidade.")
+            if correlacao.isna().any().any():
+                st.caption("N/D: alguma informação não varia neste recorte; a correlação correspondente não está definida.")
+            with st.expander("Ver correlações em tabela"):
+                st.dataframe(
+                    correlacao.rename(index=VARIAVEIS, columns=VARIAVEIS).style.format(
+                        lambda valor: numero_br(valor, 2), na_rep="N/D",
+                    )
+                )
+
+st.caption("Fonte: Hotel Booking Demand — dados históricos.")
