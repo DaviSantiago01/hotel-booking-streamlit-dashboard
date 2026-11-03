@@ -2,6 +2,8 @@
 
 Projeto acadêmico em Streamlit para explorar dados de reservas de hotéis, com base na análise exploratória do dataset **Hotel Booking Demand**.
 
+**Aplicação publicada:** [Acessar os dashboards](https://hotel-booking-app-dashboard.streamlit.app/)
+
 ## Dashboards
 
 1. **Visão geral:** primeira aba, com indicadores e gráficos sobre reservas e cancelamentos para gestores e equipes de reservas de hotéis.
